@@ -1,58 +1,19 @@
 USE [Data_Quality_Reporting]
 GO
 
-/****** Object:  View [dbo].[primary_address_territory_movement_Derm]    Script Date: 12/16/2019 11:56:51 AM ******/
+/****** Object:  View [dbo].[primary_address_territory_movement_Derm]    Script Date: 12/16/2019 12:13:16 PM ******/
 SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
-CREATE    view [dbo].[primary_address_territory_movement_Derm] as
- select
-	a1.*,
-	b1.*,
-	v2.*,
-	c.*,
-	case
-		when isnull(a1.ACCOUNT_VOD__C_old,
-		b1.ACCOUNT_VOD__C_new) is null then 'Record missing'
-		else 'Record Exist'
-	end Record_status,
-	case
-		when isnull(a1.ACCOUNT_VOD__C_old,
-		b1.ACCOUNT_VOD__C_new) is null then 'Record not Updated'
-		when isnull(a1.ACCOUNT_VOD__C_old,
-		b1.ACCOUNT_VOD__C_new) is not null
-		and c.ACCOUNT_VOD__C is null then 'Not Aligned'
-		when isnull(a1.ACCOUNT_VOD__C_old,
-		b1.ACCOUNT_VOD__C_new) is not null
-		and c.ACCOUNT_VOD__C is not null then 'Aligned'
-		else ''
-	end Alinement_status,
-	case
-		when isnull(a1.ACCOUNT_VOD__C_old,
-		b1.ACCOUNT_VOD__C_new) is null then 'Record not Updated'
-		--when isnull(a1.ACCOUNT_VOD__C_old, b1.ACCOUNT_VOD__C_new) is not null and c.ACCOUNT_VOD__C is null then 'Not Aligned'
-		when isnull(a1.ACCOUNT_VOD__C_old,
-		b1.ACCOUNT_VOD__C_new) is not null
-		and a1.[Territory_ID_old] = b1.Territory_ID_new
-		and (a1.[Territory_ID_old] is not null
-		and b1.Territory_ID_new is not null) then 'No change in the Territory'
-		when isnull(a1.ACCOUNT_VOD__C_old,
-		b1.ACCOUNT_VOD__C_new) is not null
-		and a1.[Territory_ID_old] <> b1.Territory_ID_new
-		and (a1.[Territory_ID_old] is not null
-		and b1.Territory_ID_new is not null) then 'Territory Change'
-		when a1.ACCOUNT_VOD__C_old is null
-		and b1.ACCOUNT_VOD__C_new is not null then 'Primary Flag Added'
-		when a1.ACCOUNT_VOD__C_old is not null
-		and b1.ACCOUNT_VOD__C_new is null then 'Primary Flag Removed'
-		else ''
-	end Territory_status
-from
-	(
-		select b.Name user_profile_old,
+
+
+ALTER    view [dbo].[primary_address_territory_movement_Derm] as
+With Old_addr AS
+(select
+		b.Name user_profile_old,
 		b.createddate createddate_old,
 		b.parentid parentid_old,
 		a.Primary_Address_Derm__c PRIMARY_VOD__C_old,
@@ -67,7 +28,8 @@ from
 		d.Team TEAM_Old
 	from
 		(
-			select a.*,
+		select
+			a.*,
 			c.name
 		from
 			Veeva_Replication.[db_owner].[SF_ADDRESS_VOD__HISTORY] a
@@ -75,12 +37,13 @@ from
 			(a.[CREATEDBYID] = b.id)
 		join [Veeva_Replication].db_owner.[SF_PROFILE] c on
 			(c.id = b.PROFILEID)
-		where
-			c.name not in ('Bauschhealth - DataSteward',
-			'Bauschhealth - DCR',
-			'System Administrator',
-			'Bauschhealth - Sales Operations')
-			and a.field in ('Primary_Address_Derm__c')
+		-- Removed by GV 12/13/2019
+		--where
+		--	c.name not in ('Bauschhealth - DataSteward',
+		--	'Bauschhealth - DCR',
+		--	'System Administrator',
+		--	'Bauschhealth - Sales Operations')
+			Where a.field in ('Primary_Address_Derm__c')
 			and a.oldvalue = 'true'
 			and a.[CREATEDDATE] >= '2018-10-01 00:00:00.000') b
 	left outer join [Veeva_Replication].[db_owner].[SF_ADDRESS_VOD__C] a on
@@ -89,16 +52,19 @@ from
 	left outer join [Data_Quality_Reporting].[dbo].[ZipTerr_V1] d on
 		cast(d.Zipcode as int) = cast(a.ZIP_VOD__C as int)
 		and Quarter = (
-			Select max(Quarter)
+		Select
+			max(Quarter)
 		from
 			ZipTerr_V1)
 		and team in ('Alpha',
-			'Phantom',
-			'Falcon',
-			'SILIQ',
-			'Dermatology.com')) a1
-full outer join (
-		select b.name user_profile_new,
+		'Phantom',
+		'Falcon',
+		'SILIQ',
+		'Dermatology.com')
+),
+New_addr as 
+(select
+		b.name user_profile_new,
 		b.createddate createddate_new,
 		b.parentid parentid_new,
 		a.Primary_Address_Derm__c PRIMARY_VOD__C_new,
@@ -112,8 +78,9 @@ full outer join (
 		d.Territory_ID Territory_ID_new,
 		d.Team Team_new
 	from
-		(
-			select a.*,
+		(    
+		select
+			a.*,
 			c.name
 		from
 			Veeva_Replication.[db_owner].[SF_ADDRESS_VOD__HISTORY] a
@@ -121,32 +88,66 @@ full outer join (
 			(a.[CREATEDBYID] = b.id)
 		join [Veeva_Replication].db_owner.[SF_PROFILE] c on
 			(c.id = b.PROFILEID)
-		where
-			c.name not in ('Bauschhealth - DataSteward',
-			'Bauschhealth - DCR',
-			'System Administrator',
-			'Bauschhealth - Sales Operations')
-			and a.field in ('Primary_Address_Derm__c')
+		--where
+		--	c.name not in ('Bauschhealth - DataSteward',
+		--	'Bauschhealth - DCR',
+		--	'System Administrator',
+		--	'Bauschhealth - Sales Operations')
+			Where a.field in ('Primary_Address_Derm__c')
 			and a.[CREATEDDATE] >= '2018-10-01 00:00:00.000'
-			and a.newvalue = 'true') b
+			and a.newvalue = 'true') b   
 	left outer join [Veeva_Replication].[db_owner].[SF_ADDRESS_VOD__C] a on
 		(b.parentid = a.id)
 		and a.INACTIVE_VOD__C = 0
 	left outer join [Data_Quality_Reporting].[dbo].[ZipTerr_V1] d on
 		cast(d.Zipcode as int) = cast(a.ZIP_VOD__C as int)
 		and Quarter = (
-			Select max(Quarter)
+		Select
+			max(Quarter)
 		from
 			ZipTerr_V1)
 		and team in ('Alpha',
 		'Phantom',
 		'Falcon',
 		'SILIQ',
-		'Dermatology.com') ) b1 on
-	(a1.ACCOUNT_VOD__C_old = b1.ACCOUNT_VOD__C_new
-	and a1.TEAM_Old = b1.Team_new)
-left outer join (
-		select b.ims_id__c IMS_ID_V1,
+		'Dermatology.com') 
+),
+Curr_addr AS
+(Select NULL user_profile_curr,
+		Null createddate_curr,
+		Null parentid_curr,
+		c.Primary_Address_Derm__c PRIMARY_VOD__C_curr,
+		c.ACCOUNT_VOD__C ACCOUNT_VOD__C_curr,
+		upper(c.name) street_1_curr,
+		upper(c.[ADDRESS_LINE_2_VOD__C]) street_2_curr,
+		upper(c.[CITY_VOD__C]) city_curr,
+		upper(c.[STATE_VOD__C]) State_curr,
+		c.[ZIP_VOD__C] Zip_curr,
+		c.INACTIVE_VOD__C INACTIVE_VOD__C_curr,
+		d.Territory_ID Territory_ID_curr,
+		d.team Team_Curr
+	From [Veeva_Replication].[db_owner].[SF_ADDRESS_VOD__C] c 
+		left outer join [Data_Quality_Reporting].[dbo].[ZipTerr_V1] d on
+			cast(d.Zipcode as int) = cast(c.ZIP_VOD__C as int)
+			and Quarter = (Select max(Quarter) from 	ZipTerr_V1)
+			and team in ('Alpha',
+						'Phantom',
+						'Falcon',
+						'SILIQ',
+						'Dermatology.com') 
+		Where PRIMARY_ADDRESS_DERM__C=1
+),
+New_addr2 as
+(
+	Select * from New_addr
+	UNION 
+	Select * from Curr_addr
+		Where not exists (Select 1 from New_addr where new_addr.ACCOUNT_VOD__C_new=curr_addr.ACCOUNT_VOD__C_curr)
+		AND exists(Select 1 from old_addr where old_addr.ACCOUNT_VOD__C_old=curr_addr.ACCOUNT_VOD__C_curr )
+),
+V2 AS
+(select
+		b.ims_id__c IMS_ID_V1,
 		b.SYMPHONY_ID__C HCE_ID_V1,
 		b.npi_vod__c NPI_ID_V1,
 		b.Id DS_SFID_V1,
@@ -159,11 +160,11 @@ left outer join (
 	from
 		Veeva_Replication.[db_owner].[SF_ACCOUNT] b
 	where
-		b.ispersonaccount = 1) v2 on
-	(isnull(a1.ACCOUNT_VOD__C_old,
-	b1.ACCOUNT_VOD__C_new) = v2.DS_SFID_V1)
-left outer join (
-		select *,
+		b.ispersonaccount = 1
+),
+Terr_Data AS
+(select
+		*,
 		case
 			when SUBSTRING(territory_vod__c, len(territory_vod__c) -1, 2) = 'G1' then 'Willow'
 			when SUBSTRING(territory_vod__c, len(territory_vod__c) -1, 2) = 'G2' then 'Futura'
@@ -183,7 +184,6 @@ left outer join (
 			when SUBSTRING(territory_vod__c, len(territory_vod__c) -1, 2) = 'A2' then 'Falcon'
 			when SUBSTRING(territory_vod__c, len(territory_vod__c) -1, 2) = 'SQ' then 'SILIQ'
 			when SUBSTRING(territory_vod__c, len(territory_vod__c) -1, 2) = 'D3' then 'Dermatology.com'
-			
 			when SUBSTRING(territory_vod__c, len(territory_vod__c) -1, 2) = 'N2' then 'McKinley'
 			when SUBSTRING(territory_vod__c, len(territory_vod__c) -1, 2) = 'N5' then 'Everest'
 			else ''
@@ -202,33 +202,79 @@ left outer join (
 			when SUBSTRING(territory_vod__c, len(territory_vod__c) -1, 2) = 'T1' then 'SALIX'
 			when SUBSTRING(territory_vod__c, len(territory_vod__c) -1, 2) = 'G7' then 'SALIX'
 			when SUBSTRING(territory_vod__c, len(territory_vod__c) -1, 2) = 'P1' then 'SALIX'
-			
 			when SUBSTRING(territory_vod__c, len(territory_vod__c) -1, 2) = 'A1' then 'DERM-ORTHO'
 			when SUBSTRING(territory_vod__c, len(territory_vod__c) -1, 2) = 'S1' then 'DERM-ORTHO'
 			when SUBSTRING(territory_vod__c, len(territory_vod__c) -1, 2) = 'A2' then 'DERM-ORTHO'
 			when SUBSTRING(territory_vod__c, len(territory_vod__c) -1, 2) = 'SQ' then 'DERM-ORTHO'
-			
 			when SUBSTRING(territory_vod__c, len(territory_vod__c) -1, 2) = 'N2' then 'NEURO'
 			when SUBSTRING(territory_vod__c, len(territory_vod__c) -1, 2) = 'N5' then 'NEURO'
 			else ''
 		end SALESFORCE_MED__C
 	from
 		(
-			SELECT account_vod__c,
+		SELECT
+			ACCOUNTID account_vod__c,
 			replace(Split.a.value('.', 'VARCHAR(100)'), '#', '&') AS Territory_vod__c
 		FROM
 			(
-				SELECT account_vod__c,
-				CAST ('<M>' + REplace(REPLACE(Territory_vod__c, ';', '</M><M>'), '&', '#')+ '</M>' AS XML) AS String
+			SELECT
+				ACCOUNTID,
+				CAST ('<M>' + REplace(REPLACE(Territory, ';', '</M><M>'), '&', '#')+ '</M>' AS XML) AS String
 			FROM
-				[Veeva_Replication].[db_owner].[SF_ACCOUNT_TERRITORY_LOADER_VOD__C]) AS A CROSS APPLY String.nodes ('/M') AS Split(a)
+				 Data_Quality_Reporting.dbo.PBI_TERR_ALIGNMENT) AS A CROSS APPLY String.nodes ('/M') AS Split(a)
 		WHERE
 			Split.a.value('.',
-			'VARCHAR(100)') != '') t2 ) c on
-	(isnull(a1.ACCOUNT_VOD__C_old,
-	b1.ACCOUNT_VOD__C_new) = c.ACCOUNT_VOD__C
-	and isnull(a1.team_old,
-	b1.team_new) = c.SALES_TEAM__C)
+			'VARCHAR(100)') != ''
+		) t2
+)
+Select Distinct Old_addr.*, 
+		New_addr2.user_profile_new,
+		New_addr2.createddate_new,
+		New_addr2.parentid_new,
+		New_addr2.PRIMARY_VOD__C_new,
+		New_addr2.ACCOUNT_VOD__C_new,
+		New_addr2.street_1_new,
+		New_addr2.street_2_new,
+		New_addr2.city_new,
+		New_addr2.State_new,
+		New_addr2.Zip_new,
+		New_addr2.INACTIVE_VOD__C_new,
+		New_addr2.Territory_ID_new,
+		New_addr2.Team_new,
+		v2.*,
+		C.*,
+		case
+		when COALESCE(Old_addr.ACCOUNT_VOD__C_old,New_addr2.ACCOUNT_VOD__C_new) is null then 'Record missing'
+			else 'Record Exist'
+		end Record_status,
+		case
+			when COALESCE(Old_addr.ACCOUNT_VOD__C_old,New_addr2.ACCOUNT_VOD__C_new) is null then 'Record not Updated'
+			when COALESCE(Old_addr.ACCOUNT_VOD__C_old,New_addr2.ACCOUNT_VOD__C_new) is not null and c.ACCOUNT_VOD__C is null then 'Not Aligned'
+			when COALESCE(Old_addr.ACCOUNT_VOD__C_old,New_addr2.ACCOUNT_VOD__C_new) is not null and c.ACCOUNT_VOD__C is not null then 'Aligned'
+			else ''
+		end Alinement_status,
+	case
+		when COALESCE(Old_addr.ACCOUNT_VOD__C_old,New_addr2.ACCOUNT_VOD__C_new) is null then 'Record not Updated'
+		--when isnull(Old_addr.ACCOUNT_VOD__C_old, New_Addr.ACCOUNT_VOD__C_new) is not null and c.ACCOUNT_VOD__C is null then 'Not Aligned'
+		when COALESCE(Old_addr.ACCOUNT_VOD__C_old,New_addr2.ACCOUNT_VOD__C_new) is not null	
+			and Old_addr.[Territory_ID_old] = New_addr2.Territory_ID_new
+			and (Old_addr.[Territory_ID_old] is not null
+			and New_addr2.Territory_ID_new is not null) then 'No change in the Territory'
+		when COALESCE(Old_addr.ACCOUNT_VOD__C_old,New_addr2.ACCOUNT_VOD__C_new) is not null
+			and Old_addr.[Territory_ID_old] <> New_addr2.Territory_ID_new
+			and (Old_addr.[Territory_ID_old] is not null
+			and New_addr2.Territory_ID_new is not null) then 'Territory Change'
+		when Old_addr.ACCOUNT_VOD__C_old is null and New_addr2.ACCOUNT_VOD__C_new is not null then 'Primary Flag Added'
+		when Old_addr.ACCOUNT_VOD__C_old is not null and New_addr2.ACCOUNT_VOD__C_new is null then 'Primary Flag Removed'
+		else ''
+	end Territory_status
+From Old_addr full outer Join New_addr2 on old_addr.ACCOUNT_VOD__C_old=New_addr2.ACCOUNT_VOD__C_new
+	  --Left Join V2 on COALESCE(New_addr.ACCOUNT_VOD__C_new,Curr_addr.ACCOUNT_VOD__C_curr) = v2.DS_SFID_V1
+	 Left Join V2 on New_addr2.ACCOUNT_VOD__C_new=v2.DS_SFID_V1
+	 Left Join Terr_data c on (COALESCE(old_addr.ACCOUNT_VOD__C_old,New_addr2.ACCOUNT_VOD__C_new) =c.ACCOUNT_VOD__C
+							and COALESCE(old_addr.team_old,	New_addr2.team_new) = c.SALES_TEAM__C)	 
+			--and curr_addr.PRIMARY_ADDRESS_DERM__C=1
+--where old_addr.ACCOUNT_VOD__C_old='0010P00001vC52lQAC'
 GO
 
 
